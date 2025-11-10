@@ -1,0 +1,74 @@
+代码查看器 - 便携版使用说明
+版本：0.1.0
+
+【功能特点】
+✅ 隐藏命令行界面，纯GUI运行
+✅ 支持拖拽文件直接查看
+✅ 支持命令行参数：code_notebook.exe 文件路径
+✅ 支持多种编程语言语法高亮
+✅ 完美支持中文显示
+✅ 无需安装，解压即用
+
+【使用方法】
+1. 直接运行 code_notebook.exe 启动程序
+2. 将代码文件拖拽到程序窗口中查看
+3. 添加右键菜单：
+
+   Windows 11用户（推荐）：
+   - 一级菜单完整版：右键 install_win11_complete.ps1 → "以管理员身份运行"
+   - 一级菜单基础版：右键 install_win11_menu.ps1 → "以管理员身份运行"
+
+   Windows 10/通用版本：
+   - 右键 install_context_menu.ps1 → "以管理员身份运行"
+
+4. 如需移除右键菜单：
+   - Windows 11：运行 uninstall_win11_complete.ps1
+   - 通用版本：运行 uninstall_context_menu.ps1
+
+【Windows 11 一级菜单特性】
+✅ 菜单项直接显示在一级右键菜单中
+✅ 无需点击"显示更多选项"
+✅ 支持 40+ 种代码文件类型
+✅ 支持文件夹和桌面右键菜单
+✅ 显示程序图标，美观专业
+
+注意：建议使用 .ps1 PowerShell 脚本，更稳定可靠
+如果PowerShell脚本无法运行，可以尝试 .bat 批处理文件
+
+【支持的文件类型】
+编程语言：
+.rs .c .cpp .h .hpp .py .js .ts .jsx .tsx .java .cs .php .rb .go .swift .kt .scala
+Web相关：.html .css .scss .sass .xml
+配置文件：.json .yaml .yml .toml .ini .cfg .conf
+脚本文件：.sh .bat .cmd .ps1
+其他：.sql .txt .md .markdown .log
+
+【系统要求】
+- Windows 10 或更高版本
+- 至少 10MB 可用磁盘空间
+
+【技术说明】
+本程序使用 Rust + eframe 开发，具有以下特性：
+- 启动速度快，内存占用小
+- 原生 Windows GUI，无外部依赖
+- 使用微软雅黑字体，完美支持中文
+- 自动识别文件类型并提供语法高亮
+
+【右键菜单功能】
+运行 install_context_menu.bat 后，可以在任意文件的右键菜单中看到
+"使用代码查看器打开"选项，点击即可用本程序打开文件。
+
+【卸载】
+本程序为绿色便携版，卸载只需：
+1. 运行 uninstall_context_menu.bat 移除右键菜单
+2. 删除程序所在文件夹即可
+
+【更新日志】
+v0.1.0 (2024)
+- 初始版本发布
+- 实现基本的代码查看功能
+- 添加右键菜单支持
+- 优化中文显示效果
+
+如有问题或建议，请联系开发团队。
+

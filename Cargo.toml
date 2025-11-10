@@ -1,0 +1,19 @@
+[package]
+name = "code_notebook"
+version = "0.1.0"
+edition = "2021"
+authors = ["code_notebook项目组Seraphiel"]
+
+[[bin]]
+name = "code_notebook"
+path = "src/main.rs"
+
+[dependencies]
+eframe = { version = "0.24", features = ["glow"] }
+encoding_rs = "0.8"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winuser", "windef"] }
+
+[target.'cfg(windows)'.profile.release]
+panic = "abort"
