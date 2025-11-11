@@ -1,5 +1,6 @@
 use eframe::egui;
 use phf::phf_set;
+use rayon::prelude::*;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
@@ -131,6 +132,27 @@ impl SyntaxHighlighter {
     // 清除所有缓存
     pub fn clear_cache(&mut self) {
         self.cache.clear();
+    }
+
+    // 并行解析多行（使用rayon进行并行处理）
+    pub fn parse_lines_parallel(&self, lines: &[(usize, &str)]) -> Vec<(usize, Vec<CachedToken>)> {
+        lines.par_iter()
+            .map(|&(line_number, line)| {
+                // 创建独立的语法高亮器实例用于并行处理
+                let highlighter = SyntaxHighlighter::new();
+                let tokens = highlighter.parse_line_public(line);
+                
+                // 转换为缓存Token格式
+                let cached_tokens: Vec<CachedToken> = tokens.iter().map(|token| CachedToken {
+                    text: token.text.to_string(),
+                    start_col: token.start_col,
+                    end_col: token.end_col,
+                    color: token.color,
+                }).collect();
+                
+                (line_number, cached_tokens)
+            })
+            .collect()
     }
 
     /// 简化的语法高亮解析（性能优化版本）

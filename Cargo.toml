@@ -13,6 +13,7 @@ eframe = { version = "0.24", features = ["glow"] }
 encoding_rs = "0.8"
 image = "0.24"
 phf = { version = "0.11", features = ["macros"] }
+rayon = "1.8"  # 并行计算库
 
 [target.'cfg(windows)'.build-dependencies]
 embed-resource = "2.4"

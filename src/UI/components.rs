@@ -157,6 +157,7 @@ pub struct CodeEditor {
     syntax_highlighter: SyntaxHighlighter,
     show_syntax_highlighting: bool, // true = 语法高亮只读, false = 编辑模式
     cached_highlighted_lines: Vec<egui::text::LayoutJob>,
+    layout_job_pool: Vec<egui::text::LayoutJob>, // LayoutJob对象内存池
     last_code_hash: u64,
     cached_line_height: f32,
 }
@@ -169,6 +170,7 @@ impl CodeEditor {
             syntax_highlighter: SyntaxHighlighter::new(),
             show_syntax_highlighting: true, // 默认语法高亮模式
             cached_highlighted_lines: Vec::new(),
+            layout_job_pool: Vec::new(), // 初始化内存池
             last_code_hash: code_hash,
             cached_line_height: 0.0,
         }
@@ -222,8 +224,9 @@ impl CodeEditor {
     fn render_visible_syntax_highlighted(&mut self, ui: &mut egui::Ui) {
         self.update_cached_lines();
 
-        let lines: Vec<&str> = self.code.lines().collect();
-        if lines.is_empty() || self.cached_highlighted_lines.is_empty() {
+        // 先收集行信息，避免同时借用
+        let lines_count = self.code.lines().count();
+        if lines_count == 0 || self.cached_highlighted_lines.is_empty() {
             return;
         }
 
@@ -231,7 +234,7 @@ impl CodeEditor {
         let line_height = self.get_cached_line_height(ui);
 
         // 只在滚动时重新计算可见区域（性能优化）
-        let (start_line, end_line) = self.calculate_visible_lines(ui, line_height, lines.len());
+        let (start_line, end_line) = self.calculate_visible_lines(ui, line_height, lines_count);
 
         // 为顶部空间占位
         let top_space = (start_line as f32) * line_height;
@@ -257,17 +260,20 @@ impl CodeEditor {
                     ui.add(egui::Label::new(self.cached_highlighted_lines[line_idx].clone()));
                 } else {
                     // 如果缓存中没有该行，显示原始文本（防止内容截断）
-                    ui.label(
-                        egui::RichText::new(lines[line_idx])
-                            .monospace()
-                            .size(12.0)
-                    );
+                    // 需要重新获取行内容，避免借用冲突
+                    if let Some(line_text) = self.code.lines().nth(line_idx) {
+                        ui.label(
+                            egui::RichText::new(line_text)
+                                .monospace()
+                                .size(12.0)
+                        );
+                    }
                 }
             });
         }
 
         // 为底部空间占位（确保滚动条正确工作）
-        let bottom_space = ((lines.len() - end_line) as f32) * line_height;
+        let bottom_space = ((lines_count - end_line) as f32) * line_height;
         if bottom_space > 0.0 {
             ui.add_space(bottom_space);
         }
@@ -282,24 +288,27 @@ impl CodeEditor {
             return;
         }
 
-        // 保存旧代码用于比较
-        let old_lines: Vec<&str> = if self.last_code_hash != 0 {
-            self.code.lines().collect()
+        // 先收集所有需要的信息，避免同时借用
+        let old_lines: Vec<String> = if self.last_code_hash != 0 {
+            self.code.lines().map(|s| s.to_string()).collect()
         } else {
             Vec::new()
         };
         
+        let lines: Vec<String> = self.code.lines().map(|s| s.to_string()).collect();
         self.last_code_hash = current_hash;
-        
-        let lines: Vec<&str> = self.code.lines().collect();
-        let font_id = egui::FontId::monospace(12.0);
 
-        // 如果行数减少，截断缓存
+        // 如果行数减少，截断缓存并释放内存
         if lines.len() < self.cached_highlighted_lines.len() {
-            self.cached_highlighted_lines.truncate(lines.len());
+            let removed_jobs = self.cached_highlighted_lines.split_off(lines.len());
+            for job in removed_jobs {
+                self.return_layout_job_to_pool(job);
+            }
         }
 
-        // 真正的增量更新：只更新变化的行
+        // 收集需要更新的行信息
+        let mut lines_to_update = Vec::new();
+        
         for (line_idx, line) in lines.iter().enumerate() {
             let needs_update = if line_idx < old_lines.len() {
                 // 检查行是否发生变化
@@ -311,28 +320,13 @@ impl CodeEditor {
             };
 
             if needs_update {
-                // 使用缓存系统解析行
-                let cached_tokens = self.syntax_highlighter.parse_line_with_cache(line_idx, line);
-                let mut job = egui::text::LayoutJob::default();
-
-                for token in cached_tokens {
-                    job.append(
-                        &token.text,
-                        0.0,
-                        egui::TextFormat {
-                            font_id: font_id.clone(),
-                            color: token.color,
-                            ..Default::default()
-                        },
-                    );
-                }
-
-                if line_idx < self.cached_highlighted_lines.len() {
-                    self.cached_highlighted_lines[line_idx] = job;
-                } else {
-                    self.cached_highlighted_lines.push(job);
-                }
+                lines_to_update.push((line_idx, line.clone()));
             }
+        }
+
+        // 进行并行处理
+        if !lines_to_update.is_empty() {
+            self.update_cached_lines_parallel(lines_to_update);
         }
     }
 
@@ -365,6 +359,66 @@ impl CodeEditor {
         let end_line = (end_line + buffer_size).min(total_lines);
 
         (start_line, end_line)
+    }
+
+    /// 从内存池获取或创建LayoutJob
+    fn get_layout_job_from_pool(&mut self) -> egui::text::LayoutJob {
+        if let Some(mut job) = self.layout_job_pool.pop() {
+            // 清空重用对象
+            job.sections.clear();
+            job
+        } else {
+            // 池为空，创建新对象
+            egui::text::LayoutJob::default()
+        }
+    }
+
+    /// 将LayoutJob返回到内存池
+    fn return_layout_job_to_pool(&mut self, job: egui::text::LayoutJob) {
+        // 限制内存池大小，避免无限增长
+        if self.layout_job_pool.len() < 100 {
+            self.layout_job_pool.push(job);
+        }
+    }
+
+    /// 并行更新缓存的行（使用rayon进行并行处理）
+    fn update_cached_lines_parallel(&mut self, lines_to_update: Vec<(usize, String)>) {
+        let font_id = egui::FontId::monospace(12.0);
+        
+        // 创建独立的语法高亮器实例用于并行处理
+        let highlighter = SyntaxHighlighter::new();
+        
+        // 转换为引用格式用于并行解析
+        let lines_refs: Vec<(usize, &str)> = lines_to_update.iter()
+            .map(|(idx, s)| (*idx, s.as_str()))
+            .collect();
+        
+        // 使用并行解析
+        let parsed_lines = highlighter.parse_lines_parallel(&lines_refs);
+        
+        for (line_idx, tokens) in parsed_lines {
+            let mut job = self.get_layout_job_from_pool();
+
+            for token in tokens {
+                job.append(
+                    &token.text,
+                    0.0,
+                    egui::TextFormat {
+                        font_id: font_id.clone(),
+                        color: token.color,
+                        ..Default::default()
+                    },
+                );
+            }
+
+            if line_idx < self.cached_highlighted_lines.len() {
+                // 将旧的LayoutJob返回到内存池
+                let old_job = std::mem::replace(&mut self.cached_highlighted_lines[line_idx], job);
+                self.return_layout_job_to_pool(old_job);
+            } else {
+                self.cached_highlighted_lines.push(job);
+            }
+        }
     }
 
     /// 计算代码哈希值
