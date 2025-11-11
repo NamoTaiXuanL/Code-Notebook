@@ -30,7 +30,7 @@ impl FileBrowser {
         ui.set_width(ui.available_width());
         ui.set_min_height(available_height);
 
-        // 顶部按钮区域
+        // 顶部按钮区域 - 紧贴顶部
         ui.horizontal(|ui| {
             // 返回上级目录按钮 - 使用与设置按钮相同的高度
             if self.current_directory.parent().is_some() {
@@ -504,7 +504,7 @@ impl SettingsPanel {
         ui.set_width(ui.available_width());
         ui.set_min_height(available_height);
 
-        // 顶部返回按钮 - 与文件浏览器按钮保持相同高度
+        // 顶部返回按钮 - 紧贴顶部
         if ui.selectable_label(false, "返回文件列表").clicked() {
             *show_settings = false;
         }
