@@ -291,7 +291,13 @@ impl CodeEditor {
             return;
         }
 
-        // 代码发生变化，重新生成所有语法高亮
+        // 保存旧代码用于比较
+        let old_lines: Vec<&str> = if self.last_code_hash != 0 {
+            self.code.lines().collect()
+        } else {
+            Vec::new()
+        };
+        
         self.last_code_hash = current_hash;
         
         let lines: Vec<&str> = self.code.lines().collect();
@@ -302,10 +308,18 @@ impl CodeEditor {
             self.cached_highlighted_lines.truncate(lines.len());
         }
 
-        // 只更新变化的行（增量更新）
+        // 真正的增量更新：只更新变化的行
         for (line_idx, line) in lines.iter().enumerate() {
-            if line_idx >= self.cached_highlighted_lines.len() {
-                // 新行，需要生成语法高亮
+            let needs_update = if line_idx < old_lines.len() {
+                // 检查行是否发生变化
+                line_idx >= self.cached_highlighted_lines.len() || 
+                old_lines.get(line_idx) != Some(line)
+            } else {
+                // 新行
+                true
+            };
+
+            if needs_update {
                 let tokens = self.syntax_highlighter.parse_line_public(line);
                 let mut job = egui::text::LayoutJob::default();
 
@@ -321,7 +335,11 @@ impl CodeEditor {
                     );
                 }
 
-                self.cached_highlighted_lines.push(job);
+                if line_idx < self.cached_highlighted_lines.len() {
+                    self.cached_highlighted_lines[line_idx] = job;
+                } else {
+                    self.cached_highlighted_lines.push(job);
+                }
             }
         }
     }
