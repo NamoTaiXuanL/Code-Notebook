@@ -21,7 +21,7 @@ impl FileBrowser {
         &mut self,
         ui: &mut egui::Ui,
         file_path: &Option<PathBuf>,
-        available_height: f32,
+        _available_height: f32,
         show_settings: &mut bool,
     ) -> Option<PathBuf> {
         let mut file_to_load: Option<PathBuf> = None;
@@ -29,26 +29,22 @@ impl FileBrowser {
 
         ui.set_width(ui.available_width());
 
-        // 顶部按钮区域
-        ui.add_space(1.0); // 上方间距
-        ui.horizontal(|ui| {
-            // 返回上级目录按钮
-            if self.current_directory.parent().is_some() {
-                if ui.selectable_label(false, ".. 返回上级").clicked() {
-                    if let Some(parent) = self.current_directory.parent() {
-                        directory_to_enter = Some(parent.to_path_buf());
-                    }
+        // 固定的返回上级目录按钮 - 直接在顶部
+        if self.current_directory.parent().is_some() {
+            if ui.selectable_label(false, ".. 返回上级").clicked() {
+                if let Some(parent) = self.current_directory.parent() {
+                    directory_to_enter = Some(parent.to_path_buf());
                 }
             }
-
-            // 设置按钮
+            ui.separator();
+        } else {
+            // 没有返回按钮时显示设置按钮
             let settings_text = if *show_settings { "[设置] " } else { "设置" };
             if ui.selectable_label(*show_settings, settings_text).clicked() {
                 *show_settings = !*show_settings;
             }
-        });
-        ui.add_space(1.0); // 下方间距
-        ui.separator();
+            ui.separator();
+        }
 
         // 目录显示区域 - 使用剩余空间
         egui::ScrollArea::vertical()

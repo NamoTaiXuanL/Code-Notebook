@@ -61,34 +61,33 @@ impl MainLayout {
             let total_width = ui.available_width();
             ui.horizontal(|ui| {
                 // 左侧代码显示区域 - 占75%宽度
-                ui.allocate_ui_with_layout(
-                    [total_width * 0.75, remaining_height].into(),
-                    egui::Layout::top_down(egui::Align::LEFT),
-                    |ui| {
-                        self.code_editor.render(ui, remaining_height);
-                    }
-                );
+                ui.vertical(|ui| {
+                    ui.set_width(ui.available_width() * 0.75);
+                    ui.set_min_height(remaining_height);
+
+                    self.code_editor.render(ui, remaining_height);
+                });
 
                 // 右侧目录面板 - 占25%宽度
                 ui.separator();
 
-                ui.allocate_ui_with_layout(
-                    [total_width * 0.25, remaining_height].into(),
-                    egui::Layout::top_down(egui::Align::LEFT),
-                    |ui| {
-                        let file_to_load = if app_state.show_settings {
-                            // 显示设置面板 - 不返回文件路径
-                            self.settings_panel.render(ui, remaining_height, &mut app_state.show_settings);
-                            None
-                        } else {
-                            // 显示文件浏览器 - 可能返回文件路径
-                            self.file_browser.render(ui, &app_state.file_path, remaining_height, &mut app_state.show_settings)
-                        };
-                        file_to_load
+                let file_to_load = ui.vertical(|ui| {
+                    ui.set_width(ui.available_width());
+                    ui.set_min_height(remaining_height);
+
+                    if app_state.show_settings {
+                        // 显示设置面板 - 不返回文件路径
+                        self.settings_panel.render(ui, remaining_height, &mut app_state.show_settings);
+                        None
+                    } else {
+                        // 显示文件浏览器 - 可能返回文件路径
+                        self.file_browser.render(ui, &app_state.file_path, remaining_height, &mut app_state.show_settings)
                     }
-                ).inner
+                }).inner;
             }).inner
-        }).inner
+        }).inner;
+
+        None // 返回None，因为文件加载逻辑在组件内部处理
     }
 
     /// 更新窗口标题
