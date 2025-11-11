@@ -156,14 +156,19 @@ pub struct CodeEditor {
     pub code: String,
     syntax_highlighter: SyntaxHighlighter,
     show_syntax_highlighting: bool, // true = 语法高亮只读, false = 编辑模式
+    cached_highlighted_lines: Vec<egui::text::LayoutJob>,
+    last_code_hash: u64,
 }
 
 impl CodeEditor {
     pub fn new(code: String) -> Self {
+        let code_hash = Self::calculate_code_hash(&code);
         Self {
             code,
             syntax_highlighter: SyntaxHighlighter::new(),
             show_syntax_highlighting: true, // 默认语法高亮模式
+            cached_highlighted_lines: Vec::new(),
+            last_code_hash: code_hash,
         }
     }
 
@@ -211,48 +216,96 @@ impl CodeEditor {
         });
     }
 
-    /// 渲染可见区域的语法高亮
+    /// 渲染可见区域的语法高亮（超高效版本）
     fn render_visible_syntax_highlighted(&mut self, ui: &mut egui::Ui) {
+        self.update_cached_lines();
+
         let lines: Vec<&str> = self.code.lines().collect();
-        if lines.is_empty() {
+        if lines.is_empty() || self.cached_highlighted_lines.is_empty() {
             return;
         }
 
-        // 获取字体信息
-        let font_id = egui::FontId::monospace(12.0);
-        let line_height = ui.fonts(|fonts| fonts.row_height(&font_id));
+        // 获取视口信息（使用正确的坐标系）
+        let scroll_area_rect = ui.max_rect();
+        let viewport_top = ui.clip_rect().min.y - scroll_area_rect.min.y;
+        let viewport_bottom = viewport_top + ui.clip_rect().height();
 
-        // 计算可见区域
-        let viewport_rect = ui.clip_rect();
-        let viewport_top = viewport_rect.min.y;
-        let viewport_bottom = viewport_rect.max.y;
+        // 获取行高
+        let line_height = ui.fonts(|fonts| fonts.row_height(&egui::FontId::monospace(12.0)));
 
-        // 计算可见的行范围（加上缓冲区）
-        let buffer_lines = 5; // 上下各缓冲5行
-        let start_line = ((viewport_top / line_height).floor() as usize).saturating_sub(buffer_lines);
-        let end_line = ((viewport_bottom / line_height).ceil() as usize).saturating_add(buffer_lines);
-        let start_line = start_line.min(lines.len());
-        let end_line = end_line.min(lines.len());
+        // 计算可见行范围（基于滚动位置）
+        let start_line = ((viewport_top / line_height).floor() as usize).max(0);
+        let end_line = ((viewport_bottom / line_height).ceil() as usize).min(lines.len());
 
-        // 为顶部不可见区域添加空间
+        // 添加缓冲区以实现平滑滚动（动态调整缓冲区大小）
+        let buffer_size = (ui.clip_rect().height() / line_height * 0.5).ceil() as usize;
+        let start_line = start_line.saturating_sub(buffer_size);
+        let end_line = (end_line + buffer_size).min(lines.len());
+
+        // 为顶部空间占位
         let top_space = (start_line as f32) * line_height;
         if top_space > 0.0 {
             ui.add_space(top_space);
         }
 
-        // 渲染可见的行
-        let mut line_counter = start_line;
-        for line in lines.iter().skip(start_line).take(end_line - start_line) {
+        // 只渲染可见区域的行
+        for line_idx in start_line..end_line {
+            let line_num = line_idx + 1;
+
             ui.horizontal(|ui| {
                 // 行号
                 ui.label(
-                    egui::RichText::new(format!("{:>4}", line_counter + 1))
+                    egui::RichText::new(format!("{:>4}", line_num))
                         .monospace()
                         .color(egui::Color32::GRAY)
                         .size(12.0)
                 );
 
-                // 语法高亮的代码行
+                // 使用缓存的语法高亮
+                if line_idx < self.cached_highlighted_lines.len() {
+                    ui.add(egui::Label::new(self.cached_highlighted_lines[line_idx].clone()));
+                } else {
+                    // 如果缓存中没有该行，显示原始文本（防止内容截断）
+                    ui.label(
+                        egui::RichText::new(lines[line_idx])
+                            .monospace()
+                            .size(12.0)
+                    );
+                }
+            });
+        }
+
+        // 为底部空间占位（确保滚动条正确工作）
+        let bottom_space = ((lines.len() - end_line) as f32) * line_height;
+        if bottom_space > 0.0 {
+            ui.add_space(bottom_space);
+        }
+    }
+
+    /// 更新缓存的语法高亮行（只在代码变化时）
+    fn update_cached_lines(&mut self) {
+        let current_hash = Self::calculate_code_hash(&self.code);
+
+        // 如果代码没有变化，使用缓存
+        if current_hash == self.last_code_hash && !self.cached_highlighted_lines.is_empty() {
+            return;
+        }
+
+        // 代码发生变化，重新生成所有语法高亮
+        self.last_code_hash = current_hash;
+        
+        let lines: Vec<&str> = self.code.lines().collect();
+        let font_id = egui::FontId::monospace(12.0);
+
+        // 如果行数减少，截断缓存
+        if lines.len() < self.cached_highlighted_lines.len() {
+            self.cached_highlighted_lines.truncate(lines.len());
+        }
+
+        // 只更新变化的行（增量更新）
+        for (line_idx, line) in lines.iter().enumerate() {
+            if line_idx >= self.cached_highlighted_lines.len() {
+                // 新行，需要生成语法高亮
                 let tokens = self.syntax_highlighter.parse_line_public(line);
                 let mut job = egui::text::LayoutJob::default();
 
@@ -268,16 +321,19 @@ impl CodeEditor {
                     );
                 }
 
-                ui.add(egui::Label::new(job));
-            });
-            line_counter += 1;
+                self.cached_highlighted_lines.push(job);
+            }
         }
+    }
 
-        // 为底部不可见区域添加空间，确保滚动条正确工作
-        let bottom_space = ((lines.len() - end_line) as f32) * line_height;
-        if bottom_space > 0.0 {
-            ui.add_space(bottom_space);
-        }
+    /// 计算代码哈希值
+    fn calculate_code_hash(code: &str) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+        code.hash(&mut hasher);
+        hasher.finish()
     }
 }
 

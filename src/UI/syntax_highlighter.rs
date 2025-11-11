@@ -18,7 +18,8 @@ impl SyntaxHighlighter {
         Self { rust_keywords }
     }
 
-    // 使用 LayoutJob API 创建语法高亮的文本布局
+    // 为了兼容性保留旧方法，但不使用
+    #[allow(dead_code)]
     pub fn layout_job(&self, code: &str) -> egui::text::LayoutJob {
         let mut job = egui::text::LayoutJob::default();
 
@@ -53,7 +54,8 @@ impl SyntaxHighlighter {
         job
     }
 
-    // 渲染单行的语法高亮 - 用于优化大文件性能
+    // 为了兼容性保留旧方法，但不使用
+    #[allow(dead_code)]
     pub fn layout_job_line(&self, line: &str) -> egui::text::LayoutJob {
         let mut job = egui::text::LayoutJob::default();
 
@@ -294,7 +296,9 @@ impl SyntaxHighlighter {
 
 pub struct Token {
     pub text: String,
+    #[allow(dead_code)]
     pub start_col: usize,
+    #[allow(dead_code)]
     pub end_col: usize,
     pub color: egui::Color32,
 }
