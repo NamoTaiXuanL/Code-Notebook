@@ -68,8 +68,10 @@ fn setup_chinese_fonts(ctx: &egui::Context) {
     // 添加目录列表的字体样式
     style.text_styles.insert(TextStyle::Small, FontId::new(13.0, egui::FontFamily::Proportional));
 
-    // 设置明亮的前景色，提高可读性
-    style.visuals.text_color = Color32::from_rgb(240, 240, 240); // 很浅的灰色，接近白色
+    // 设置更明亮的前景色，提高可读性
+    style.visuals.widgets.noninteractive.fg_stroke.color = Color32::from_rgb(240, 240, 240);
+    style.visuals.selection.stroke.color = Color32::from_rgb(100, 150, 255);
+    style.visuals.selection.bg_fill = Color32::from_rgba_premultiplied(100, 150, 255, 50);
 
     ctx.set_style(style);
 }
@@ -79,17 +81,30 @@ struct AppState {
     code: String,           // 代码内容
     file_path: Option<PathBuf>, // 文件路径
     status: String,        // 状态信息
-    directory_files: Vec<String>, // 目录文件列表
+    current_directory: PathBuf, // 当前显示的目录
+    directory_items: Vec<DirectoryItem>, // 目录内容列表
+}
+
+#[derive(Clone)]
+struct DirectoryItem {
+    name: String,
+    path: PathBuf,
+    is_directory: bool,
 }
 
 impl Default for AppState {
     fn default() -> Self {
-        Self {
+        let mut state = Self {
             code: "将代码文件拖拽到窗口即可查看".to_string(),
             file_path: None,
             status: String::new(),
-            directory_files: Vec::new(),
-        }
+            current_directory: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            directory_items: Vec::new(),
+        };
+
+        // 加载初始目录内容
+        state.load_directory_content();
+        state
     }
 }
 
@@ -102,7 +117,7 @@ impl eframe::App for AppState {
         if let Some(path) = &self.file_path {
             if let Some(file_name) = path.file_name() {
                 if let Some(name_str) = file_name.to_str() {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!("代码查看器 - {}", name_str)));
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!("{} - 代码查看器", name_str)));
                 }
             }
         } else {
@@ -119,7 +134,6 @@ impl eframe::App for AppState {
                         ui.label(format!("状态: {}", self.status));
                     }
                 });
-                ui.separator();
             }
 
             // 获取剩余可用空间
@@ -160,60 +174,88 @@ impl eframe::App for AppState {
                     ui.set_width(ui.available_width());
                     ui.set_min_height(available_height);
 
+                    // 目录标题
                     ui.label("📁 目录");
-                    ui.separator();
 
-                    // 目录显示区域 - 独立滚动
+                    // 显示当前目录路径
+                    ui.label(format!("📂 {}", self.current_directory.display()));
+
+                    // 固定的返回上级目录按钮
+                    if self.current_directory.parent().is_some() {
+                        ui.separator();
+                        if ui.selectable_label(false, "⬆️ .. 返回上级目录").clicked() {
+                            if let Some(parent) = self.current_directory.parent() {
+                                self.current_directory = parent.to_path_buf();
+                                self.load_directory_content();
+                            }
+                        }
+                        ui.separator();
+                    } else {
+                        ui.separator();
+                    }
+
+                    // 目录显示区域 - 使用剩余空间
                     egui::ScrollArea::vertical()
                         .id_source("file_list") // 设置唯一ID
                         .auto_shrink([false, false])
                         .stick_to_bottom(false)
                         .show(ui, |ui| {
                             // 如果目录为空，显示提示
-                            if self.directory_files.is_empty() {
+                            if self.directory_items.is_empty() {
                                 ui.add_space(20.0);
-                                ui.label("无文件");
+                                ui.label("目录为空");
                             } else {
-                                // 创建一个要加载的文件路径的临时列表
+                                // 创建要操作的项目列表
                                 let mut file_to_load: Option<PathBuf> = None;
+                                let mut directory_to_enter: Option<PathBuf> = None;
 
                                 // 高亮显示当前文件
-                                for file_name in self.directory_files.iter() {
-                                    let is_current_file = if let Some(current_path) = &self.file_path {
-                                        current_path.file_name()
-                                            .and_then(|name| name.to_str())
-                                            .map(|current_name| current_name == *file_name)
-                                            .unwrap_or(false)
+                                for item in &self.directory_items {
+                                    let is_current_file = if !item.is_directory {
+                                        if let Some(current_path) = &self.file_path {
+                                            current_path.file_name()
+                                                .and_then(|name| name.to_str())
+                                                .map(|current_name| current_name == item.name)
+                                                .unwrap_or(false)
+                                        } else {
+                                            false
+                                        }
                                     } else {
                                         false
                                     };
 
                                     // 添加图标
-                                    let icon = if file_name.ends_with(".rs") { "🦀 " }
-                                        else if file_name.ends_with(".py") { "🐍 " }
-                                        else if file_name.ends_with(".js") { "🟨 " }
-                                        else if file_name.ends_with(".html") || file_name.ends_with(".htm") { "🌐 " }
-                                        else if file_name.ends_with(".css") { "🎨 " }
-                                        else if file_name.ends_with(".json") || file_name.ends_with(".xml") { "📄 " }
-                                        else if file_name.ends_with(".md") { "📝 " }
-                                        else if file_name.ends_with(".gitignore") || file_name.starts_with('.') { "⚙️ " }
+                                    let icon = if item.is_directory {
+                                        "📁 "
+                                    } else if item.name.ends_with(".rs") { "🦀 " }
+                                        else if item.name.ends_with(".py") { "🐍 " }
+                                        else if item.name.ends_with(".js") { "🟨 " }
+                                        else if item.name.ends_with(".html") || item.name.ends_with(".htm") { "🌐 " }
+                                        else if item.name.ends_with(".css") { "🎨 " }
+                                        else if item.name.ends_with(".json") || item.name.ends_with(".xml") { "📄 " }
+                                        else if item.name.ends_with(".md") { "📝 " }
+                                        else if item.name.ends_with(".gitignore") || item.name.starts_with('.') { "⚙️ " }
                                         else { "📄 " };
 
-                                    let display_name = format!("{}{}", icon, file_name);
+                                    let display_name = format!("{}{}", icon, item.name);
 
                                     if ui.selectable_label(is_current_file, display_name).clicked() {
-                                        // 点击目录中的文件时记录要加载的文件
-                                        if let Some(current_path) = &self.file_path {
-                                            if let Some(parent_dir) = current_path.parent() {
-                                                file_to_load = Some(parent_dir.join(file_name));
-                                            }
+                                        if item.is_directory {
+                                            // 点击文件夹：进入该目录
+                                            directory_to_enter = Some(item.path.clone());
+                                        } else {
+                                            // 点击文件：加载该文件
+                                            file_to_load = Some(item.path.clone());
                                         }
                                     }
                                 }
 
-                                // 在循环结束后加载文件，避免借用冲突
-                                if let Some(new_file_path) = file_to_load {
-                                    self.load_file(new_file_path);
+                                // 处理操作
+                                if let Some(dir_path) = directory_to_enter {
+                                    self.current_directory = dir_path;
+                                    self.load_directory_content();
+                                } else if let Some(file_path) = file_to_load {
+                                    self.load_file(file_path);
                                 }
                             }
                         });
@@ -247,38 +289,57 @@ impl AppState {
                 self.status = "已加载".to_string();
                 self.file_path = Some(path.clone());
 
-                // 加载同目录下的其他文件
-                self.load_directory_files(&path);
+                // 设置当前目录为文件所在目录
+                if let Some(parent_dir) = path.parent() {
+                    self.current_directory = parent_dir.to_path_buf();
+                    self.load_directory_content();
+                }
             }
             Err(e) => {
                 self.code = format!("读取失败: {}", e);
                 self.status = "错误".to_string();
                 self.file_path = None;
-                self.directory_files.clear();
+                self.directory_items.clear();
             }
         }
     }
 
-    /// 加载目录文件列表
-    fn load_directory_files(&mut self, file_path: &PathBuf) {
-        self.directory_files.clear();
+    /// 加载当前目录的内容
+    fn load_directory_content(&mut self) {
+        self.directory_items.clear();
 
-        if let Some(parent_dir) = file_path.parent() {
-            if let Ok(entries) = std::fs::read_dir(parent_dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    // 只添加文件，不添加目录
-                    if path.is_file() {
-                        if let Some(file_name) = path.file_name() {
-                            if let Some(name_str) = file_name.to_str() {
-                                self.directory_files.push(name_str.to_string());
-                            }
+        if let Ok(entries) = std::fs::read_dir(&self.current_directory) {
+            let mut directories = Vec::new();
+            let mut files = Vec::new();
+
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let is_directory = path.is_dir();
+
+                if let Some(file_name) = path.file_name() {
+                    if let Some(name_str) = file_name.to_str() {
+                        let item = DirectoryItem {
+                            name: name_str.to_string(),
+                            path: path.clone(),
+                            is_directory,
+                        };
+
+                        if is_directory {
+                            directories.push(item);
+                        } else {
+                            files.push(item);
                         }
                     }
                 }
-                // 按字母顺序排序
-                self.directory_files.sort();
             }
+
+            // 排序：目录在前，文件在后，都按字母顺序排序
+            directories.sort_by(|a, b| a.name.cmp(&b.name));
+            files.sort_by(|a, b| a.name.cmp(&b.name));
+
+            // 合并列表
+            self.directory_items.extend(directories);
+            self.directory_items.extend(files);
         }
     }
 }
