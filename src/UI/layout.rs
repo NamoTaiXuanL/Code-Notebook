@@ -12,8 +12,11 @@ pub struct MainLayout {
 
 impl MainLayout {
     pub fn new(app_state: &AppState) -> Self {
+        let mut file_browser = FileBrowser::new(app_state.current_directory.clone());
+        file_browser.directory_items = app_state.directory_items.clone();
+
         Self {
-            file_browser: FileBrowser::new(app_state.current_directory.clone()),
+            file_browser,
             code_editor: CodeEditor::new(app_state.code.clone()),
             status_bar: StatusBar::new(app_state.file_path.clone(), app_state.status.clone()),
         }
@@ -21,12 +24,20 @@ impl MainLayout {
 
     /// 渲染主布局
     pub fn render(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame, app_state: &mut AppState) -> Option<PathBuf> {
-        // 更新组件状态
-        self.file_browser.current_directory = app_state.current_directory.clone();
-        self.file_browser.directory_items = app_state.directory_items.clone();
-        self.code_editor.code = app_state.code.clone();
-        self.status_bar.file_path = app_state.file_path.clone();
-        self.status_bar.status = app_state.status.clone();
+        // 只在需要时更新组件状态
+        if self.file_browser.current_directory != app_state.current_directory {
+            self.file_browser.current_directory = app_state.current_directory.clone();
+        }
+        if self.file_browser.directory_items.len() != app_state.directory_items.len() {
+            self.file_browser.directory_items = app_state.directory_items.clone();
+        }
+        if self.code_editor.code != app_state.code {
+            self.code_editor.code = app_state.code.clone();
+        }
+        if self.status_bar.file_path != app_state.file_path {
+            self.status_bar.file_path = app_state.file_path.clone();
+            self.status_bar.status = app_state.status.clone();
+        }
 
         // 更新窗口标题
         self.update_window_title(ctx, &app_state.file_path);
