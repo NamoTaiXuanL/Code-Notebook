@@ -53,6 +53,28 @@ impl SyntaxHighlighter {
         job
     }
 
+    // 渲染单行的语法高亮 - 用于优化大文件性能
+    pub fn layout_job_line(&self, line: &str) -> egui::text::LayoutJob {
+        let mut job = egui::text::LayoutJob::default();
+
+        let tokens = self.parse_line(line);
+
+        for token in tokens {
+            job.append(
+                &token.text,
+                0.0,  // text_offset
+                egui::TextFormat {
+                    font_id: egui::FontId::monospace(12.0),
+                    color: token.color,
+                    valign: egui::Align::Center,
+                    ..Default::default()
+                },
+            );
+        }
+
+        job
+    }
+
     // 为了兼容性保留旧方法，但不使用
     #[allow(dead_code)]
     pub fn paint_highlights(&self, painter: &egui::Painter, rect: egui::Rect, code: &str, char_width: f32, line_height: f32) {

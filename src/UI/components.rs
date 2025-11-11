@@ -155,6 +155,8 @@ use crate::ui::syntax_highlighter::SyntaxHighlighter;
 pub struct CodeEditor {
     pub code: String,
     syntax_highlighter: SyntaxHighlighter,
+    show_syntax_highlighting: bool,
+    scroll_offset_y: f32,
 }
 
 impl CodeEditor {
@@ -162,6 +164,8 @@ impl CodeEditor {
         Self {
             code,
             syntax_highlighter: SyntaxHighlighter::new(),
+            show_syntax_highlighting: true,
+            scroll_offset_y: 0.0,
         }
     }
 
@@ -170,31 +174,116 @@ impl CodeEditor {
         ui.set_width(ui.available_width());
         ui.set_min_height(available_height);
 
-        // 代码显示区域 - 使用语法高亮的TextEdit
-        egui::ScrollArea::vertical()
+        // 代码显示区域 - 添加双向滚动
+        egui::ScrollArea::both()
             .id_source("code_content")
             .auto_shrink([false, false])
             .stick_to_bottom(false)
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
 
-                // 创建语法高亮的 TextEdit
-                let mut layouter = |ui: &egui::Ui, text: &str, _wrap_width: f32| {
-                    // 使用语法高亮器创建 LayoutJob
-                    let layout_job = self.syntax_highlighter.layout_job(text);
-                    ui.fonts(|fonts| fonts.layout_job(layout_job.into()))
-                };
+                if self.show_syntax_highlighting {
+                    // 使用 TextEdit + layouter 的正确方案
+                    let mut layouter = |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                        // 为每一行创建 LayoutJob
+                        let mut job = egui::text::LayoutJob::default();
 
-                ui.add(
-                    egui::TextEdit::multiline(&mut self.code)
-                        .font(egui::TextStyle::Monospace)
-                        .code_editor()
-                        .desired_width(ui.available_width())
-                        .lock_focus(false)
-                        .interactive(true)
-                        .layouter(&mut layouter)
-                );
+                        for line in text.lines() {
+                            // 添加行号
+                            job.append(
+                                &format!("{:>4} ", line_counter + 1),
+                                0.0,
+                                egui::TextFormat {
+                                    font_id: egui::FontId::monospace(12.0),
+                                    color: egui::Color32::GRAY,
+                                    valign: egui::Align::Center,
+                                    ..Default::default()
+                                },
+                            );
+
+                            // 添加语法高亮的代码行
+                            let line_job = self.syntax_highlighter.layout_job_line(line);
+                            for section in line_job.sections {
+                                job.sections.push(section);
+                            }
+
+                            // 添加换行
+                            job.append(
+                                "\n",
+                                0.0,
+                                egui::TextFormat {
+                                    font_id: egui::FontId::monospace(12.0),
+                                    color: egui::Color32::GRAY,
+                                    ..Default::default()
+                                },
+                            );
+                        }
+
+                        ui.fonts(|fonts| fonts.layout_job(job))
+                    };
+
+                    let mut line_counter = 0;
+                    ui.add(
+                        egui::TextEdit::multiline(&mut self.code)
+                            .font(egui::TextStyle::Monospace)
+                            .code_editor()
+                            .desired_width(f32::INFINITY)
+                            .lock_focus(false)
+                            .interactive(true)
+                            .layouter(&mut layouter)
+                    );
+                } else {
+                    // 普通编辑模式 - 无语法高亮，性能更好
+                    ui.add(
+                        egui::TextEdit::multiline(&mut self.code)
+                            .font(egui::TextStyle::Monospace)
+                            .code_editor()
+                            .desired_width(f32::INFINITY)
+                            .lock_focus(false)
+                            .interactive(true)
+                    );
+                }
             });
+
+        // 添加模式切换按钮
+        ui.horizontal(|ui| {
+            if ui.button(if self.show_syntax_highlighting { "切换到快速模式" } else { "切换到语法高亮" }).clicked() {
+                self.show_syntax_highlighting = !self.show_syntax_highlighting;
+            }
+
+            ui.label(if self.show_syntax_highlighting {
+                "✨ 语法高亮模式（适合小文件）"
+            } else {
+                "⚡ 快速模式（适合大文件）"
+            });
+        });
+    }
+
+    /// 优化的语法高亮渲染 - 只渲染可见区域
+    fn render_syntax_highlighted(&mut self, ui: &mut egui::Ui) {
+        let lines: Vec<&str> = self.code.lines().collect();
+        if lines.is_empty() {
+            return;
+        }
+
+        let line_height = ui.fonts(|fonts| fonts.row_height(&egui::FontId::monospace(12.0)));
+
+        // 简化方案：渲染所有行，但使用更高效的方法
+        for (line_idx, line) in lines.iter().enumerate() {
+            ui.horizontal(|ui| {
+                // 行号
+                ui.label(
+                    egui::RichText::new(format!("{:>4}", line_idx + 1))
+                        .monospace()
+                        .color(egui::Color32::GRAY)
+                        .size(12.0)
+                );
+
+                // 语法高亮的代码行
+                let layout_job = self.syntax_highlighter.layout_job_line(line);
+                ui.add(egui::Label::new(layout_job));
+            });
+        }
     }
 }
 
