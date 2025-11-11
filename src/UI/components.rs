@@ -160,6 +160,9 @@ pub struct CodeEditor {
     layout_job_pool: Vec<egui::text::LayoutJob>, // LayoutJob对象内存池
     last_code_hash: u64,
     cached_line_height: f32,
+    last_scroll_position: f32, // 上次滚动位置，用于检测滚动状态
+    is_scrolling: bool,         // 是否正在滚动
+    scroll_timer: u32,          // 滚动计时器，用于延迟语法高亮
 }
 
 impl CodeEditor {
@@ -173,6 +176,9 @@ impl CodeEditor {
             layout_job_pool: Vec::new(), // 初始化内存池
             last_code_hash: code_hash,
             cached_line_height: 0.0,
+            last_scroll_position: 0.0,
+            is_scrolling: false,
+            scroll_timer: 0,
         }
     }
 
@@ -180,6 +186,9 @@ impl CodeEditor {
     pub fn render(&mut self, ui: &mut egui::Ui, available_height: f32) {
         ui.set_width(ui.available_width());
         ui.set_min_height(available_height);
+
+        // 检测滚动状态
+        self.detect_scrolling_state(ui);
 
         // 代码显示区域 - 添加双向滚动
         egui::ScrollArea::both()
@@ -222,7 +231,10 @@ impl CodeEditor {
 
     /// 渲染可见区域的语法高亮（超高效版本）
     fn render_visible_syntax_highlighted(&mut self, ui: &mut egui::Ui) {
-        self.update_cached_lines();
+        // 只在非滚动状态或滚动停止时更新缓存
+        if !self.is_scrolling || self.scroll_timer == 0 {
+            self.update_cached_lines();
+        }
 
         // 先收集行信息，避免同时借用
         let lines_count = self.code.lines().count();
@@ -277,6 +289,28 @@ impl CodeEditor {
         if bottom_space > 0.0 {
             ui.add_space(bottom_space);
         }
+    }
+
+    /// 检测滚动状态并更新计时器
+    fn detect_scrolling_state(&mut self, ui: &egui::Ui) {
+        // 获取当前滚动位置
+        let current_scroll = ui.clip_rect().min.y;
+        
+        // 检测滚动状态变化
+        if (current_scroll - self.last_scroll_position).abs() > 1.0 {
+            // 正在滚动
+            self.is_scrolling = true;
+            self.scroll_timer = 5; // 设置计时器为5帧
+        } else if self.scroll_timer > 0 {
+            // 计时器递减
+            self.scroll_timer -= 1;
+        } else {
+            // 滚动停止
+            self.is_scrolling = false;
+        }
+        
+        // 更新上次滚动位置
+        self.last_scroll_position = current_scroll;
     }
 
     /// 更新缓存的语法高亮行（只在代码变化时）
