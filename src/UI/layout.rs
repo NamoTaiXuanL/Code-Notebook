@@ -61,14 +61,6 @@ impl MainLayout {
                     self.file_browser.render(ui, &app_state.file_path, status_height)
                 }).inner;
 
-
-                // 如果需要，更新app状态
-                if let Some(new_code) = Some(self.code_editor.code.clone()) {
-                    if new_code != app_state.code {
-                        app_state.code = new_code;
-                    }
-                }
-
                 file_to_load
             }).inner
         }).inner

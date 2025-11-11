@@ -49,12 +49,20 @@ impl eframe::App for AppState {
         let mut main_layout = MainLayout::new(self);
 
         // 渲染UI并获取可能的文件加载请求
-        if let Some(file_to_load) = main_layout.render(ctx, frame, self) {
-            self.load_file(file_to_load);
+        let file_to_load = main_layout.render(ctx, frame, self);
+
+        // 处理文件加载
+        if let Some(file_path) = file_to_load {
+            self.load_file(file_path);
         }
 
-        // 从布局组件同步状态回应用状态
-        self.code = main_layout.code_editor.code.clone();
+        // 同步代码编辑器的修改（但不覆盖文件内容）
+        // 注意：只有当没有文件路径时才同步，避免覆盖文件内容
+        if self.file_path.is_none() && main_layout.code_editor.code != self.code {
+            self.code = main_layout.code_editor.code.clone();
+        }
+
+        // 同步目录状态（目录切换时）
         self.current_directory = main_layout.file_browser.current_directory.clone();
         self.directory_items = main_layout.file_browser.directory_items.clone();
     }
