@@ -133,6 +133,7 @@ impl SyntaxHighlighter {
         self.cache.clear();
     }
 
+    /// 简化的语法高亮解析（性能优化版本）
     pub fn parse_line_public<'a>(&self, line: &'a str) -> Vec<Token<'a>> {
         // 预分配token向量，假设平均每行有10个token
         let mut tokens = Vec::with_capacity(10);
@@ -156,10 +157,9 @@ impl SyntaxHighlighter {
                     }
 
                     let word = &line[start..end];
+                    // 简化颜色方案：只区分关键字和标识符
                     let color = if RUST_KEYWORDS.contains(word) {
                         egui::Color32::from_rgb(255, 140, 0) // 橙色关键字
-                    } else if word == "true" || word == "false" {
-                        egui::Color32::from_rgb(0, 128, 0) // 绿色布尔值
                     } else {
                         egui::Color32::from_rgb(0, 100, 200) // 蓝色标识符
                     };
@@ -172,7 +172,7 @@ impl SyntaxHighlighter {
                     });
                 }
                 ch if ch.is_whitespace() => {
-                    // 空白字符 - 使用切片避免字符串复制
+                    // 空白字符 - 简化处理，不单独着色
                     let start = start_idx;
                     let mut end = start_idx + ch.len_utf8();
 
@@ -195,25 +195,17 @@ impl SyntaxHighlighter {
                     });
                 }
                 '"' => {
-                    // 字符串字面量 - 使用切片避免字符串复制
+                    // 字符串字面量 - 简化处理，使用单一颜色
                     let start = start_idx;
                     let mut end = start_idx + ch.len_utf8();
-                    let mut is_escaped = false;
 
+                    // 简单处理：找到下一个引号
                     while let Some(&(next_idx, next_ch)) = chars.peek() {
                         end = next_idx + next_ch.len_utf8();
                         chars.next();
-
-                        if next_ch == '\\' && !is_escaped {
-                            is_escaped = true;
-                            continue;
-                        }
-
-                        if next_ch == '"' && !is_escaped {
+                        if next_ch == '"' {
                             break;
                         }
-
-                        is_escaped = false;
                     }
 
                     let string_lit = &line[start..end];
@@ -225,25 +217,17 @@ impl SyntaxHighlighter {
                     });
                 }
                 '\'' => {
-                    // 字符字面量 - 使用切片避免字符串复制
+                    // 字符字面量 - 简化处理，与字符串使用相同颜色
                     let start = start_idx;
                     let mut end = start_idx + ch.len_utf8();
-                    let mut is_escaped = false;
 
+                    // 简单处理：找到下一个单引号
                     while let Some(&(next_idx, next_ch)) = chars.peek() {
                         end = next_idx + next_ch.len_utf8();
                         chars.next();
-
-                        if next_ch == '\\' && !is_escaped {
-                            is_escaped = true;
-                            continue;
-                        }
-
-                        if next_ch == '\'' && !is_escaped {
+                        if next_ch == '\'' {
                             break;
                         }
-
-                        is_escaped = false;
                     }
 
                     let char_lit = &line[start..end];

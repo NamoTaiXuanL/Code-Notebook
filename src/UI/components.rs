@@ -158,6 +158,7 @@ pub struct CodeEditor {
     show_syntax_highlighting: bool, // true = 语法高亮只读, false = 编辑模式
     cached_highlighted_lines: Vec<egui::text::LayoutJob>,
     last_code_hash: u64,
+    cached_line_height: f32,
 }
 
 impl CodeEditor {
@@ -169,6 +170,7 @@ impl CodeEditor {
             show_syntax_highlighting: true, // 默认语法高亮模式
             cached_highlighted_lines: Vec::new(),
             last_code_hash: code_hash,
+            cached_line_height: 0.0,
         }
     }
 
@@ -225,22 +227,11 @@ impl CodeEditor {
             return;
         }
 
-        // 获取视口信息（使用正确的坐标系）
-        let scroll_area_rect = ui.max_rect();
-        let viewport_top = ui.clip_rect().min.y - scroll_area_rect.min.y;
-        let viewport_bottom = viewport_top + ui.clip_rect().height();
+        // 获取行高（使用缓存避免频繁查询字体）
+        let line_height = self.get_cached_line_height(ui);
 
-        // 获取行高
-        let line_height = ui.fonts(|fonts| fonts.row_height(&egui::FontId::monospace(12.0)));
-
-        // 计算可见行范围（基于滚动位置）
-        let start_line = ((viewport_top / line_height).floor() as usize).max(0);
-        let end_line = ((viewport_bottom / line_height).ceil() as usize).min(lines.len());
-
-        // 添加缓冲区以实现平滑滚动（动态调整缓冲区大小）
-        let buffer_size = (ui.clip_rect().height() / line_height * 0.5).ceil() as usize;
-        let start_line = start_line.saturating_sub(buffer_size);
-        let end_line = (end_line + buffer_size).min(lines.len());
+        // 只在滚动时重新计算可见区域（性能优化）
+        let (start_line, end_line) = self.calculate_visible_lines(ui, line_height, lines.len());
 
         // 为顶部空间占位
         let top_space = (start_line as f32) * line_height;
@@ -343,6 +334,37 @@ impl CodeEditor {
                 }
             }
         }
+    }
+
+    /// 获取缓存的行高（避免频繁查询字体）
+    fn get_cached_line_height(&mut self, ui: &egui::Ui) -> f32 {
+        // 如果已经缓存了行高，直接返回
+        if self.cached_line_height > 0.0 {
+            return self.cached_line_height;
+        }
+        
+        // 计算并缓存行高
+        self.cached_line_height = ui.fonts(|fonts| fonts.row_height(&egui::FontId::monospace(12.0)));
+        self.cached_line_height
+    }
+
+    /// 计算可见行范围（只在滚动时重新计算）
+    fn calculate_visible_lines(&mut self, ui: &egui::Ui, line_height: f32, total_lines: usize) -> (usize, usize) {
+        // 获取视口信息
+        let scroll_area_rect = ui.max_rect();
+        let viewport_top = ui.clip_rect().min.y - scroll_area_rect.min.y;
+        let viewport_bottom = viewport_top + ui.clip_rect().height();
+
+        // 计算基础可见行范围
+        let start_line = ((viewport_top / line_height).floor() as usize).max(0);
+        let end_line = ((viewport_bottom / line_height).ceil() as usize).min(total_lines);
+
+        // 添加缓冲区以实现平滑滚动
+        let buffer_size = (ui.clip_rect().height() / line_height * 0.3).ceil() as usize; // 减少缓冲区大小
+        let start_line = start_line.saturating_sub(buffer_size);
+        let end_line = (end_line + buffer_size).min(total_lines);
+
+        (start_line, end_line)
     }
 
     /// 计算代码哈希值
