@@ -32,7 +32,7 @@ impl FileBrowser {
 
         // 顶部按钮区域
         ui.horizontal(|ui| {
-            // 返回上级目录按钮
+            // 返回上级目录按钮 - 使用与设置按钮相同的高度
             if self.current_directory.parent().is_some() {
                 if ui.selectable_label(false, ".. 返回上级").clicked() {
                     if let Some(parent) = self.current_directory.parent() {
@@ -190,8 +190,8 @@ impl CodeEditor {
         // 检测滚动状态
         self.detect_scrolling_state(ui);
 
-        // 代码显示区域 - 添加双向滚动
-        egui::ScrollArea::both()
+        // 代码显示区域 - 只能上下滚动
+        egui::ScrollArea::vertical()
             .id_source("code_content")
             .auto_shrink([false, false])
             .stick_to_bottom(false)
@@ -504,16 +504,23 @@ impl SettingsPanel {
         ui.set_width(ui.available_width());
         ui.set_min_height(available_height);
 
-        // 顶部返回按钮
+        // 顶部返回按钮 - 与文件浏览器按钮保持相同高度
         if ui.selectable_label(false, "返回文件列表").clicked() {
             *show_settings = false;
         }
-
-        // 简单的设置面板
-        ui.heading("界面设置");
         ui.separator();
 
-        ui.add_space(20.0);
-        ui.label("设置功能开发中...");
+        // 设置内容区域 - 使用剩余空间，与目录显示区域保持一致
+        egui::ScrollArea::vertical()
+            .id_source("settings_list")
+            .auto_shrink([false, false])
+            .stick_to_bottom(false)
+            .show(ui, |ui| {
+                ui.heading("界面设置");
+                ui.separator();
+
+                ui.add_space(20.0);
+                ui.label("设置功能开发中...");
+            });
     }
 }
