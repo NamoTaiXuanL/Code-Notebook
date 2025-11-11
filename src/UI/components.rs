@@ -22,6 +22,7 @@ impl FileBrowser {
         ui: &mut egui::Ui,
         file_path: &Option<PathBuf>,
         available_height: f32,
+        show_settings: &mut bool,
     ) -> Option<PathBuf> {
         let mut file_to_load: Option<PathBuf> = None;
         let mut directory_to_enter: Option<PathBuf> = None;
@@ -29,15 +30,24 @@ impl FileBrowser {
         ui.set_width(ui.available_width());
         ui.set_min_height(available_height);
 
-        // 固定的返回上级目录按钮 - 直接在顶部
-        if self.current_directory.parent().is_some() {
-            if ui.selectable_label(false, "⬆️ .. 返回上级目录").clicked() {
-                if let Some(parent) = self.current_directory.parent() {
-                    directory_to_enter = Some(parent.to_path_buf());
+        // 顶部按钮区域
+        ui.horizontal(|ui| {
+            // 返回上级目录按钮
+            if self.current_directory.parent().is_some() {
+                if ui.selectable_label(false, ".. 返回上级").clicked() {
+                    if let Some(parent) = self.current_directory.parent() {
+                        directory_to_enter = Some(parent.to_path_buf());
+                    }
                 }
             }
-            ui.separator();
-        }
+
+            // 设置按钮
+            let settings_text = if *show_settings { "[设置] " } else { "设置" };
+            if ui.selectable_label(*show_settings, settings_text).clicked() {
+                *show_settings = !*show_settings;
+            }
+        });
+        ui.separator();
 
         // 目录显示区域 - 使用剩余空间
         egui::ScrollArea::vertical()
@@ -196,5 +206,39 @@ impl StatusBar {
             });
             ui.separator();
         }
+    }
+}
+
+/// 设置框组件
+pub struct SettingsPanel {
+    pub syntax_highlighting: bool,
+}
+
+impl SettingsPanel {
+    pub fn new() -> Self {
+        Self {
+            syntax_highlighting: true,
+        }
+    }
+
+    /// 渲染设置面板
+    pub fn render(&mut self, ui: &mut egui::Ui, available_height: f32, show_settings: &mut bool) {
+        ui.set_width(ui.available_width());
+        ui.set_min_height(available_height);
+
+        // 顶部返回按钮
+        if ui.selectable_label(false, "返回文件列表").clicked() {
+            *show_settings = false;
+        }
+
+        // 简单的设置面板
+        ui.heading("界面设置");
+        ui.separator();
+
+        // 只保留语法高亮设置
+        ui.checkbox(&mut self.syntax_highlighting, "启用语法高亮");
+
+        ui.add_space(20.0);
+        ui.label("其他设置功能开发中...");
     }
 }

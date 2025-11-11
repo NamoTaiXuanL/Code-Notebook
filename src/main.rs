@@ -22,6 +22,7 @@ pub struct AppState {
     pub status: String,        // 状态信息
     pub current_directory: PathBuf, // 当前显示的目录
     pub directory_items: Vec<DirectoryItem>, // 目录内容列表
+    pub show_settings: bool,   // 是否显示设置面板
 }
 
 impl Default for AppState {
@@ -32,6 +33,7 @@ impl Default for AppState {
             status: String::new(),
             current_directory: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             directory_items: Vec::new(),
+            show_settings: false,
         };
 
         // 加载初始目录内容

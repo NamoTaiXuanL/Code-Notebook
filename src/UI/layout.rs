@@ -1,6 +1,6 @@
 use eframe::egui;
 use std::path::PathBuf;
-use crate::ui::components::{FileBrowser, CodeEditor, StatusBar};
+use crate::ui::components::{FileBrowser, CodeEditor, StatusBar, SettingsPanel};
 use crate::AppState;
 
 /// 主布局管理器
@@ -8,6 +8,7 @@ pub struct MainLayout {
     pub file_browser: FileBrowser,
     pub code_editor: CodeEditor,
     pub status_bar: StatusBar,
+    pub settings_panel: SettingsPanel,
 }
 
 impl MainLayout {
@@ -19,6 +20,7 @@ impl MainLayout {
             file_browser,
             code_editor: CodeEditor::new(app_state.code.clone()),
             status_bar: StatusBar::new(app_state.file_path.clone(), app_state.status.clone()),
+            settings_panel: SettingsPanel::new(),
         }
     }
 
@@ -44,33 +46,46 @@ impl MainLayout {
 
         // 渲染主面板
         egui::CentralPanel::default().show(ctx, |ui| {
-            // 渲染状态栏
-            let status_height = if app_state.file_path.is_some() {
+            // 获取总可用高度，不受状态栏影响
+            let total_available_height = ui.available_height();
+
+            // 渲染状态栏（如果有文件）
+            if app_state.file_path.is_some() {
                 self.status_bar.render(ui);
-                ui.available_height()
-            } else {
-                ui.available_height()
-            };
+            }
+
+            // 计算剩余可用高度给内容区域
+            let remaining_height = ui.available_height();
 
             // 创建水平布局：代码显示区和目录面板
             ui.horizontal(|ui| {
                 // 左侧代码显示区域 - 占75%宽度
                 ui.vertical(|ui| {
                     ui.set_width(ui.available_width() * 0.75);
-                    ui.set_min_height(status_height);
+                    ui.set_min_height(remaining_height);
 
-                    self.code_editor.render(ui, status_height);
+                    self.code_editor.render(ui, remaining_height);
                 });
 
                 // 右侧目录面板 - 占25%宽度
                 ui.separator();
 
-                let file_to_load = ui.vertical(|ui| {
-                    ui.set_width(ui.available_width());
-                    ui.set_min_height(status_height);
-
-                    self.file_browser.render(ui, &app_state.file_path, status_height)
-                }).inner;
+                let file_to_load = if app_state.show_settings {
+                    // 显示设置面板 - 不返回文件路径
+                    ui.vertical(|ui| {
+                        ui.set_width(ui.available_width());
+                        ui.set_min_height(remaining_height);
+                        self.settings_panel.render(ui, remaining_height, &mut app_state.show_settings);
+                    });
+                    None
+                } else {
+                    // 显示文件浏览器 - 可能返回文件路径
+                    ui.vertical(|ui| {
+                        ui.set_width(ui.available_width());
+                        ui.set_min_height(remaining_height);
+                        self.file_browser.render(ui, &app_state.file_path, remaining_height, &mut app_state.show_settings)
+                    }).inner
+                };
 
                 file_to_load
             }).inner
