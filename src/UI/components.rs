@@ -320,10 +320,11 @@ impl CodeEditor {
             };
 
             if needs_update {
-                let tokens = self.syntax_highlighter.parse_line_public(line);
+                // 使用缓存系统解析行
+                let cached_tokens = self.syntax_highlighter.parse_line_with_cache(line_idx, line);
                 let mut job = egui::text::LayoutJob::default();
 
-                for token in tokens {
+                for token in cached_tokens {
                     job.append(
                         &token.text,
                         0.0,

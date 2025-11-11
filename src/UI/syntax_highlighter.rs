@@ -1,5 +1,8 @@
 use eframe::egui;
 use phf::phf_set;
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::collections::hash_map::DefaultHasher;
 
 // 编译时生成的完美哈希关键字集合
 static RUST_KEYWORDS: phf::Set<&'static str> = phf_set! {
@@ -9,11 +12,22 @@ static RUST_KEYWORDS: phf::Set<&'static str> = phf_set! {
     "await", "move", "const", "static", "type", "where", "in",
 };
 
-pub struct SyntaxHighlighter {}
+pub struct SyntaxHighlighter {
+    cache: HashMap<usize, (u64, Vec<CachedToken>)>,
+}
 
 impl SyntaxHighlighter {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            cache: HashMap::new(),
+        }
+    }
+
+    // 计算行的哈希值用于缓存检测
+    fn compute_line_hash(&self, line: &str) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        line.hash(&mut hasher);
+        hasher.finish()
     }
 
     // 为了兼容性保留旧方法，但不使用
@@ -54,10 +68,10 @@ impl SyntaxHighlighter {
 
     // 为了兼容性保留旧方法，但不使用
     #[allow(dead_code)]
-    pub fn layout_job_line(&self, line: &str) -> egui::text::LayoutJob {
+    pub fn layout_job_line(&mut self, line_number: usize, line: &str) -> egui::text::LayoutJob {
         let mut job = egui::text::LayoutJob::default();
 
-        let tokens = self.parse_line_public(line);
+        let tokens = self.parse_line_with_cache(line_number, line);
 
         for token in tokens {
             job.append(
@@ -79,6 +93,44 @@ impl SyntaxHighlighter {
     #[allow(dead_code)]
     pub fn paint_highlights(&self, _painter: &egui::Painter, _rect: egui::Rect, _code: &str, _char_width: f32, _line_height: f32) {
         // 这个方法现在不用了，我们改用 LayoutJob
+    }
+
+    // 带缓存的解析方法
+    pub fn parse_line_with_cache(&mut self, line_number: usize, line: &str) -> Vec<CachedToken> {
+        let line_hash = self.compute_line_hash(line);
+        
+        // 检查缓存中是否有该行的有效结果
+        if let Some((cached_hash, cached_tokens)) = self.cache.get(&line_number) {
+            if *cached_hash == line_hash {
+                return cached_tokens.clone();
+            }
+        }
+        
+        // 缓存未命中或哈希不匹配，重新解析
+        let tokens = self.parse_line_public(line);
+        
+        // 转换为缓存Token格式
+        let cached_tokens: Vec<CachedToken> = tokens.iter().map(|token| CachedToken {
+            text: token.text.to_string(),
+            start_col: token.start_col,
+            end_col: token.end_col,
+            color: token.color,
+        }).collect();
+        
+        // 更新缓存
+        self.cache.insert(line_number, (line_hash, cached_tokens.clone()));
+        
+        cached_tokens
+    }
+
+    // 清除特定行的缓存
+    pub fn invalidate_line_cache(&mut self, line_number: usize) {
+        self.cache.remove(&line_number);
+    }
+
+    // 清除所有缓存
+    pub fn clear_cache(&mut self) {
+        self.cache.clear();
     }
 
     pub fn parse_line_public<'a>(&self, line: &'a str) -> Vec<Token<'a>> {
@@ -302,6 +354,17 @@ impl SyntaxHighlighter {
 
 pub struct Token<'a> {
     pub text: &'a str,  // 使用字符串切片引用，避免复制
+    #[allow(dead_code)]
+    pub start_col: usize,
+    #[allow(dead_code)]
+    pub end_col: usize,
+    pub color: egui::Color32,
+}
+
+// 用于缓存的Token结构，拥有字符串数据
+#[derive(Clone)]
+pub struct CachedToken {
+    pub text: String,  // 拥有字符串数据
     #[allow(dead_code)]
     pub start_col: usize,
     #[allow(dead_code)]
