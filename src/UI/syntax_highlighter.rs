@@ -1,21 +1,19 @@
 use eframe::egui;
-use std::collections::HashSet;
+use phf::phf_set;
 
-pub struct SyntaxHighlighter {
-    rust_keywords: HashSet<&'static str>,
-}
+// 编译时生成的完美哈希关键字集合
+static RUST_KEYWORDS: phf::Set<&'static str> = phf_set! {
+    "fn", "let", "mut", "pub", "priv", "struct", "impl", "trait", "enum",
+    "if", "else", "match", "for", "while", "loop", "break", "continue",
+    "use", "mod", "crate", "super", "self", "Self", "return", "async",
+    "await", "move", "const", "static", "type", "where", "in",
+};
+
+pub struct SyntaxHighlighter {}
 
 impl SyntaxHighlighter {
     pub fn new() -> Self {
-        let mut rust_keywords = HashSet::new();
-        rust_keywords.extend([
-            "fn", "let", "mut", "pub", "priv", "struct", "impl", "trait", "enum",
-            "if", "else", "match", "for", "while", "loop", "break", "continue",
-            "use", "mod", "crate", "super", "self", "Self", "return", "async",
-            "await", "move", "const", "static", "type", "where", "in",
-        ]);
-
-        Self { rust_keywords }
+        Self {}
     }
 
     // 为了兼容性保留旧方法，但不使用
@@ -83,8 +81,9 @@ impl SyntaxHighlighter {
         // 这个方法现在不用了，我们改用 LayoutJob
     }
 
-    pub fn parse_line_public(&self, line: &str) -> Vec<Token> {
-        let mut tokens = Vec::new();
+    pub fn parse_line_public<'a>(&self, line: &'a str) -> Vec<Token<'a>> {
+        // 预分配token向量，假设平均每行有10个token
+        let mut tokens = Vec::with_capacity(10);
         let mut chars = line.char_indices().peekable();
 
         while let Some((start_idx, ch)) = chars.next() {
@@ -105,7 +104,7 @@ impl SyntaxHighlighter {
                     }
 
                     let word = &line[start..end];
-                    let color = if self.rust_keywords.contains(word) {
+                    let color = if RUST_KEYWORDS.contains(word) {
                         egui::Color32::from_rgb(255, 140, 0) // 橙色关键字
                     } else if word == "true" || word == "false" {
                         egui::Color32::from_rgb(0, 128, 0) // 绿色布尔值
@@ -114,7 +113,7 @@ impl SyntaxHighlighter {
                     };
 
                     tokens.push(Token {
-                        text: word.to_string(),
+                        text: word,
                         start_col: start,
                         end_col: end,
                         color,
@@ -137,7 +136,7 @@ impl SyntaxHighlighter {
 
                     let whitespace = &line[start..end];
                     tokens.push(Token {
-                        text: whitespace.to_string(),
+                        text: whitespace,
                         start_col: start,
                         end_col: end,
                         color: egui::Color32::GRAY, // 灰色空白字符
@@ -167,7 +166,7 @@ impl SyntaxHighlighter {
 
                     let string_lit = &line[start..end];
                     tokens.push(Token {
-                        text: string_lit.to_string(),
+                        text: string_lit,
                         start_col: start,
                         end_col: end,
                         color: egui::Color32::from_rgb(0, 128, 0), // 绿色字符串
@@ -197,7 +196,7 @@ impl SyntaxHighlighter {
 
                     let char_lit = &line[start..end];
                     tokens.push(Token {
-                        text: char_lit.to_string(),
+                        text: char_lit,
                         start_col: start,
                         end_col: end,
                         color: egui::Color32::from_rgb(0, 128, 0), // 绿色字符
@@ -219,7 +218,7 @@ impl SyntaxHighlighter {
 
                     let number = &line[start..end];
                     tokens.push(Token {
-                        text: number.to_string(),
+                        text: number,
                         start_col: start,
                         end_col: end,
                         color: egui::Color32::from_rgb(128, 0, 128), // 紫色数字
@@ -235,14 +234,14 @@ impl SyntaxHighlighter {
                             end += chars.next().unwrap().1.len_utf8(); // 消耗第二个 '/'
 
                             // 消耗该行剩余所有字符
-                            while let Some(&(next_idx, _)) = chars.peek() {
-                                end = next_idx + 1; // 假设ASCII字符
+                            while let Some(&(next_idx, next_ch)) = chars.peek() {
+                                end = next_idx + next_ch.len_utf8(); // 正确处理UTF-8字符
                                 chars.next();
                             }
 
                             let comment = &line[start..end];
                             tokens.push(Token {
-                                text: comment.to_string(),
+                                text: comment,
                                 start_col: start,
                                 end_col: end,
                                 color: egui::Color32::from_rgb(100, 100, 100), // 灰色注释
@@ -252,8 +251,10 @@ impl SyntaxHighlighter {
                     }
 
                     // 普通除号或运算符
+                    // 单个字符需要转换为字符串切片
+                    let char_str = &line[start_idx..start_idx + ch.len_utf8()];
                     tokens.push(Token {
-                        text: ch.to_string(),
+                        text: char_str,
                         start_col: start_idx,
                         end_col: start_idx + ch.len_utf8(),
                         color: egui::Color32::from_rgb(200, 100, 0), // 棕色运算符
@@ -261,8 +262,10 @@ impl SyntaxHighlighter {
                 }
                 ch if "+-*/%=&|<>!^".contains(ch) => {
                     // 运算符
+                    // 单个字符需要转换为字符串切片
+                    let char_str = &line[start_idx..start_idx + ch.len_utf8()];
                     tokens.push(Token {
-                        text: ch.to_string(),
+                        text: char_str,
                         start_col: start_idx,
                         end_col: start_idx + ch.len_utf8(),
                         color: egui::Color32::from_rgb(200, 100, 0), // 棕色运算符
@@ -270,8 +273,10 @@ impl SyntaxHighlighter {
                 }
                 ch if "(){}[];:,".contains(ch) => {
                     // 标点符号
+                    // 单个字符需要转换为字符串切片
+                    let char_str = &line[start_idx..start_idx + ch.len_utf8()];
                     tokens.push(Token {
-                        text: ch.to_string(),
+                        text: char_str,
                         start_col: start_idx,
                         end_col: start_idx + ch.len_utf8(),
                         color: egui::Color32::from_rgb(50, 50, 50), // 深灰色标点
@@ -279,8 +284,10 @@ impl SyntaxHighlighter {
                 }
                 _ => {
                     // 其他字符
+                    // 单个字符需要转换为字符串切片
+                    let char_str = &line[start_idx..start_idx + ch.len_utf8()];
                     tokens.push(Token {
-                        text: ch.to_string(),
+                        text: char_str,
                         start_col: start_idx,
                         end_col: start_idx + ch.len_utf8(),
                         color: egui::Color32::DARK_GRAY,
