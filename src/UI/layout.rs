@@ -58,10 +58,11 @@ impl MainLayout {
             let remaining_height = ui.available_height();
 
             // 创建水平布局：代码显示区和目录面板
+            let total_width = ui.available_width();
             ui.horizontal(|ui| {
                 // 左侧代码显示区域 - 占75%宽度
                 ui.allocate_ui_with_layout(
-                    [ui.available_width() * 0.75, remaining_height].into(),
+                    [total_width * 0.75, remaining_height].into(),
                     egui::Layout::top_down(egui::Align::LEFT),
                     |ui| {
                         self.code_editor.render(ui, remaining_height);
@@ -71,24 +72,21 @@ impl MainLayout {
                 // 右侧目录面板 - 占25%宽度
                 ui.separator();
 
-                let file_to_load = if app_state.show_settings {
-                    // 显示设置面板 - 不返回文件路径
-                    ui.vertical(|ui| {
-                        ui.set_width(ui.available_width());
-                        ui.set_min_height(remaining_height);
-                        self.settings_panel.render(ui, remaining_height, &mut app_state.show_settings);
-                    });
-                    None
-                } else {
-                    // 显示文件浏览器 - 可能返回文件路径
-                    ui.vertical(|ui| {
-                        ui.set_width(ui.available_width());
-                        ui.set_min_height(remaining_height);
-                        self.file_browser.render(ui, &app_state.file_path, remaining_height, &mut app_state.show_settings)
-                    }).inner
-                };
-
-                file_to_load
+                ui.allocate_ui_with_layout(
+                    [total_width * 0.25, remaining_height].into(),
+                    egui::Layout::top_down(egui::Align::LEFT),
+                    |ui| {
+                        let file_to_load = if app_state.show_settings {
+                            // 显示设置面板 - 不返回文件路径
+                            self.settings_panel.render(ui, remaining_height, &mut app_state.show_settings);
+                            None
+                        } else {
+                            // 显示文件浏览器 - 可能返回文件路径
+                            self.file_browser.render(ui, &app_state.file_path, remaining_height, &mut app_state.show_settings)
+                        };
+                        file_to_load
+                    }
+                ).inner
             }).inner
         }).inner
     }

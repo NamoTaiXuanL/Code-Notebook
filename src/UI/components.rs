@@ -178,13 +178,21 @@ impl CodeEditor {
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
 
-                // 使用 LayoutJob 进行语法高亮
-                let layout_job = self.syntax_highlighter.layout_job(&self.code);
+                // 创建语法高亮的 TextEdit
+                let mut layouter = |ui: &egui::Ui, text: &str, _wrap_width: f32| {
+                    // 使用语法高亮器创建 LayoutJob
+                    let layout_job = self.syntax_highlighter.layout_job(text);
+                    ui.fonts(|fonts| fonts.layout_job(layout_job.into()))
+                };
 
-                // 使用带有语法高亮的文本显示
                 ui.add(
-                    egui::Label::new(layout_job)
-                        .wrap(true)
+                    egui::TextEdit::multiline(&mut self.code)
+                        .font(egui::TextStyle::Monospace)
+                        .code_editor()
+                        .desired_width(ui.available_width())
+                        .lock_focus(false)
+                        .interactive(true)
+                        .layouter(&mut layouter)
                 );
             });
     }
