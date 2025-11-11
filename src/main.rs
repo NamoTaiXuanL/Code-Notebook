@@ -144,6 +144,28 @@ impl AppState {
     }
 }
 
+/// 加载应用图标（使用嵌入的图标数据）
+fn load_icon() -> Option<eframe::egui:: IconData> {
+    // 嵌入图标数据到程序中
+    let icon_bytes = include_bytes!("../Assets/Resources/LOGO/LOGO.png");
+
+    if let Ok(img) = image::load_from_memory(icon_bytes) {
+        // 调整到合适的图标尺寸（128x128）
+        let resized_img = img.resize(128, 128, image::imageops::FilterType::Lanczos3);
+        let rgba = resized_img.to_rgba8();
+        let (width, height) = rgba.dimensions();
+
+        Some(eframe::egui::IconData {
+            rgba: rgba.to_vec(),
+            width,
+            height,
+        })
+    } else {
+        eprintln!("无法解析嵌入的图标数据");
+        None
+    }
+}
+
 fn main() -> eframe::Result<()> {
     // 获取命令行参数
     let args: Vec<String> = std::env::args().collect();
@@ -157,16 +179,26 @@ fn main() -> eframe::Result<()> {
         initial_state.load_file(file_path);
     }
 
+    // 加载应用图标
+    let icon_data = load_icon();
+
+    let mut viewport_builder = egui::ViewportBuilder::default()
+        .with_inner_size([1200.0, 800.0])
+        .with_min_inner_size([600.0, 400.0])
+        .with_title("Code Notebook - 代码查看器");
+
+    // 设置图标
+    if let Some(icon) = icon_data {
+        viewport_builder = viewport_builder.with_icon(icon);
+    }
+
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1200.0, 800.0])
-            .with_min_inner_size([600.0, 400.0])
-            .with_title("代码查看器"),
+        viewport: viewport_builder,
         ..Default::default()
     };
 
     eframe::run_native(
-        "代码查看器",
+        "Code Notebook",
         options,
         Box::new(|cc| {
             // 设置中文字体支持

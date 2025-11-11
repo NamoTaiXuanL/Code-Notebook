@@ -11,6 +11,10 @@ path = "src/main.rs"
 [dependencies]
 eframe = { version = "0.24", features = ["glow"] }
 encoding_rs = "0.8"
+image = "0.24"
+
+[target.'cfg(windows)'.build-dependencies]
+embed-resource = "2.4"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winuser", "windef"] }

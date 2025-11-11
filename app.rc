@@ -1,0 +1,31 @@
+#include <windows.h>
+
+// 应用程序图标
+1 ICON "Assets/Resources/LOGO/LOGO.ico"
+
+// 版本信息
+1 VERSIONINFO
+FILEVERSION 0,1,0,0
+PRODUCTVERSION 0,1,0,0
+FILEOS 0x40004L
+FILETYPE 0x1L
+{
+    BLOCK "StringFileInfo"
+    {
+        BLOCK "040904B0"
+        {
+            VALUE "CompanyName", "Code Notebook Project"
+            VALUE "FileDescription", "Code Notebook"
+            VALUE "FileVersion", "0.1.0"
+            VALUE "InternalName", "code_notebook"
+            VALUE "LegalCopyright", "Copyright (C) 2025"
+            VALUE "OriginalFilename", "code_notebook.exe"
+            VALUE "ProductName", "Code Notebook"
+            VALUE "ProductVersion", "0.1.0"
+        }
+    }
+    BLOCK "VarFileInfo"
+    {
+        VALUE "Translation", 0x409, 1200
+    }
+}
