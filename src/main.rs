@@ -127,24 +127,25 @@ impl eframe::App for AppState {
         // 创建主布局：左侧代码区域 + 右侧目录
         egui::CentralPanel::default().show(ctx, |ui| {
             // 显示状态栏
-            if let Some(path) = &self.file_path {
+            let status_height = if let Some(path) = &self.file_path {
                 ui.horizontal(|ui| {
                     ui.label(format!("文件: {}", path.display()));
                     if !self.status.is_empty() {
                         ui.label(format!("状态: {}", self.status));
                     }
                 });
-            }
-
-            // 获取剩余可用空间
-            let available_height = ui.available_height();
+                ui.separator();
+                ui.available_height()
+            } else {
+                ui.available_height()
+            };
 
             // 创建水平布局：代码显示区和目录面板
             ui.horizontal(|ui| {
                 // 左侧代码显示区域 - 占75%宽度
                 ui.vertical(|ui| {
                     ui.set_width(ui.available_width() * 0.75);
-                    ui.set_min_height(available_height);
+                    ui.set_min_height(status_height);
 
                     // 代码显示区域 - 使用TextEdit支持编辑
                     egui::ScrollArea::vertical()
@@ -172,25 +173,16 @@ impl eframe::App for AppState {
 
                 ui.vertical(|ui| {
                     ui.set_width(ui.available_width());
-                    ui.set_min_height(available_height);
+                    ui.set_min_height(status_height);
 
-                    // 目录标题
-                    ui.label("📁 目录");
-
-                    // 显示当前目录路径
-                    ui.label(format!("📂 {}", self.current_directory.display()));
-
-                    // 固定的返回上级目录按钮
+                    // 固定的返回上级目录按钮 - 直接在顶部
                     if self.current_directory.parent().is_some() {
-                        ui.separator();
                         if ui.selectable_label(false, "⬆️ .. 返回上级目录").clicked() {
                             if let Some(parent) = self.current_directory.parent() {
                                 self.current_directory = parent.to_path_buf();
                                 self.load_directory_content();
                             }
                         }
-                        ui.separator();
-                    } else {
                         ui.separator();
                     }
 
