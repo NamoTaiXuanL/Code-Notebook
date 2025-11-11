@@ -81,6 +81,10 @@ impl SyntaxHighlighter {
         // 这个方法现在不用了，我们改用 LayoutJob
     }
 
+    pub fn parse_line_public(&self, line: &str) -> Vec<Token> {
+        self.parse_line(line)
+    }
+
     fn parse_line(&self, line: &str) -> Vec<Token> {
         let mut tokens = Vec::new();
         let mut chars = line.char_indices().peekable();
@@ -288,9 +292,9 @@ impl SyntaxHighlighter {
     }
 }
 
-struct Token {
-    text: String,
-    start_col: usize,
-    end_col: usize,
-    color: egui::Color32,
+pub struct Token {
+    pub text: String,
+    pub start_col: usize,
+    pub end_col: usize,
+    pub color: egui::Color32,
 }
