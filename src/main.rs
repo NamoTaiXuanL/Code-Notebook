@@ -53,6 +53,15 @@ impl eframe::App for AppState {
             // 文件加载后直接更新状态，避免下一帧的额外开销
             self.load_file(file_path);
         }
+
+        // 同步目录状态（重要：用于目录导航）
+        self.current_directory = main_layout.file_browser.current_directory.clone();
+        self.directory_items = main_layout.file_browser.directory_items.clone();
+
+        // 同步用户编辑的代码（只在无文件时，避免覆盖文件内容）
+        if self.file_path.is_none() && main_layout.code_editor.code != self.code {
+            self.code = main_layout.code_editor.code.clone();
+        }
     }
 }
 
