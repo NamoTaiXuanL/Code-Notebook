@@ -49,10 +49,10 @@ impl MainLayout {
             // 获取总可用高度，不受状态栏影响
             let total_available_height = ui.available_height();
 
-            // 渲染状态栏（如果有文件）
-            if app_state.file_path.is_some() {
-                self.status_bar.render(ui);
-            }
+            // 状态栏暂时不渲染以节省空间
+            // if app_state.file_path.is_some() {
+            //     self.status_bar.render(ui);
+            // }
 
             // 计算剩余可用高度给内容区域
             let remaining_height = ui.available_height();

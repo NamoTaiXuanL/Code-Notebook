@@ -28,11 +28,11 @@ impl FileBrowser {
         let mut directory_to_enter: Option<PathBuf> = None;
 
         ui.set_width(ui.available_width());
-        ui.set_min_height(available_height);
 
-        // 顶部按钮区域 - 紧贴顶部
+        // 顶部按钮区域
+        ui.add_space(1.0); // 上方间距
         ui.horizontal(|ui| {
-            // 返回上级目录按钮 - 使用与设置按钮相同的高度
+            // 返回上级目录按钮
             if self.current_directory.parent().is_some() {
                 if ui.selectable_label(false, ".. 返回上级").clicked() {
                     if let Some(parent) = self.current_directory.parent() {
@@ -47,6 +47,7 @@ impl FileBrowser {
                 *show_settings = !*show_settings;
             }
         });
+        ui.add_space(1.0); // 下方间距
         ui.separator();
 
         // 目录显示区域 - 使用剩余空间
@@ -486,7 +487,7 @@ impl StatusBar {
                     ui.label(format!("状态: {}", self.status));
                 }
             });
-            ui.separator();
+            // 移除分割线以减少额外的空间占用
         }
     }
 }
