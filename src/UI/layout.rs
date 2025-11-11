@@ -60,12 +60,13 @@ impl MainLayout {
             // 创建水平布局：代码显示区和目录面板
             ui.horizontal(|ui| {
                 // 左侧代码显示区域 - 占75%宽度
-                ui.vertical(|ui| {
-                    ui.set_width(ui.available_width() * 0.75);
-                    ui.set_min_height(remaining_height);
-
-                    self.code_editor.render(ui, remaining_height);
-                });
+                ui.allocate_ui_with_layout(
+                    [ui.available_width() * 0.75, remaining_height].into(),
+                    egui::Layout::top_down(egui::Align::LEFT),
+                    |ui| {
+                        self.code_editor.render(ui, remaining_height);
+                    }
+                );
 
                 // 右侧目录面板 - 占25%宽度
                 ui.separator();

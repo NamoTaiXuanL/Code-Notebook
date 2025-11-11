@@ -149,14 +149,20 @@ impl FileBrowser {
     }
 }
 
+use crate::ui::syntax_highlighter::SyntaxHighlighter;
+
 /// 代码编辑器组件
 pub struct CodeEditor {
     pub code: String,
+    syntax_highlighter: SyntaxHighlighter,
 }
 
 impl CodeEditor {
     pub fn new(code: String) -> Self {
-        Self { code }
+        Self {
+            code,
+            syntax_highlighter: SyntaxHighlighter::new(),
+        }
     }
 
     /// 渲染代码编辑器
@@ -164,7 +170,7 @@ impl CodeEditor {
         ui.set_width(ui.available_width());
         ui.set_min_height(available_height);
 
-        // 代码显示区域 - 使用TextEdit支持编辑
+        // 代码显示区域 - 使用语法高亮的TextEdit
         egui::ScrollArea::vertical()
             .id_source("code_content")
             .auto_shrink([false, false])
@@ -172,13 +178,13 @@ impl CodeEditor {
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
 
+                // 使用 LayoutJob 进行语法高亮
+                let layout_job = self.syntax_highlighter.layout_job(&self.code);
+
+                // 使用带有语法高亮的文本显示
                 ui.add(
-                    egui::TextEdit::multiline(&mut self.code)
-                        .font(egui::TextStyle::Monospace)
-                        .code_editor()
-                        .desired_width(ui.available_width())
-                        .lock_focus(false)
-                        .interactive(true)
+                    egui::Label::new(layout_job)
+                        .wrap(true)
                 );
             });
     }
@@ -210,15 +216,11 @@ impl StatusBar {
 }
 
 /// 设置框组件
-pub struct SettingsPanel {
-    pub syntax_highlighting: bool,
-}
+pub struct SettingsPanel;
 
 impl SettingsPanel {
     pub fn new() -> Self {
-        Self {
-            syntax_highlighting: true,
-        }
+        Self
     }
 
     /// 渲染设置面板
@@ -235,10 +237,7 @@ impl SettingsPanel {
         ui.heading("界面设置");
         ui.separator();
 
-        // 只保留语法高亮设置
-        ui.checkbox(&mut self.syntax_highlighting, "启用语法高亮");
-
         ui.add_space(20.0);
-        ui.label("其他设置功能开发中...");
+        ui.label("设置功能开发中...");
     }
 }
