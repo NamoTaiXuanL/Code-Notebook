@@ -190,8 +190,8 @@ impl CodeEditor {
         // 检测滚动状态
         self.detect_scrolling_state(ui);
 
-        // 代码显示区域 - 只能上下滚动
-        egui::ScrollArea::vertical()
+        // 代码显示区域 - 保留滚动条但限制只能上下拖动
+        egui::ScrollArea::both()
             .id_source("code_content")
             .auto_shrink([false, false])
             .stick_to_bottom(false)
